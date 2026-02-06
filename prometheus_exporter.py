@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+import datetime
 import logging
 import os
+import re
+import subprocess
 import sys
 import time
 from typing import Dict, List, Optional, Tuple
@@ -15,7 +18,6 @@ if SUBMODULE_ROOT not in sys.path:
 
 from NovaApi.ListDevices.nbe_list_devices import request_device_list
 from ProtoDecoders.decoder import get_canonic_ids, parse_device_list_protobuf
-from NovaApi.ExecuteAction.LocateTracker.location_request import get_location_data_for_device
 
 
 class FindMyToolsCollector:
@@ -39,6 +41,69 @@ class FindMyToolsCollector:
         if not coordinate_reports:
             return None
         return max(coordinate_reports, key=lambda r: r["time"])
+
+    @staticmethod
+    def _parse_reports_from_output(raw_output: str) -> List[Dict]:
+        reports: List[Dict] = []
+        current: Dict = {}
+
+        for line in raw_output.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("Latitude:"):
+                current["latitude"] = float(stripped.split(":", 1)[1].strip())
+            elif stripped.startswith("Longitude:"):
+                current["longitude"] = float(stripped.split(":", 1)[1].strip())
+            elif stripped.startswith("Altitude:"):
+                current["altitude"] = float(stripped.split(":", 1)[1].strip())
+            elif stripped.startswith("Time:"):
+                dt_str = stripped.split(":", 1)[1].strip()
+                dt = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                current["time"] = int(time.mktime(dt.timetuple()))
+            elif stripped.startswith("Status:"):
+                current["status"] = int(stripped.split(":", 1)[1].strip())
+            elif stripped.startswith("Is Own Report:"):
+                own_raw = stripped.split(":", 1)[1].strip().lower()
+                current["is_own_report"] = own_raw == "true"
+            elif re.fullmatch(r"-{5,}", stripped):
+                # Report blocks end with separator line.
+                if "time" in current and "status" in current and "is_own_report" in current:
+                    reports.append(
+                        {
+                            "latitude": current.get("latitude"),
+                            "longitude": current.get("longitude"),
+                            "altitude": current.get("altitude"),
+                            "time": current["time"],
+                            "status": current["status"],
+                            "is_own_report": current["is_own_report"],
+                        }
+                    )
+                current = {}
+
+        return reports
+
+    def _fetch_reports_for_device(self, device_id: str, device_name: str) -> List[Dict]:
+        cmd = [
+            sys.executable,
+            "-c",
+            (
+                "import os,sys;"
+                "root=sys.argv[1];"
+                "sys.path.insert(0, os.path.join(root,'GoogleFindMyTools'));"
+                "from NovaApi.ExecuteAction.LocateTracker.location_request import get_location_data_for_device;"
+                "get_location_data_for_device(sys.argv[2], sys.argv[3])"
+            ),
+            REPO_ROOT,
+            device_id,
+            device_name,
+        ]
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=self._location_timeout_seconds,
+            check=True,
+        )
+        return self._parse_reports_from_output(completed.stdout)
 
     def collect(self):
         labels = ["device_id", "device_name"]
@@ -93,12 +158,7 @@ class FindMyToolsCollector:
         for device_name, device_id in self._devices:
             label_values = [device_id, device_name]
             try:
-                reports = get_location_data_for_device(
-                    device_id,
-                    device_name,
-                    print_output=False,
-                    timeout_seconds=self._location_timeout_seconds,
-                )
+                reports = self._fetch_reports_for_device(device_id, device_name)
                 latest = self._latest_coordinate_report(reports)
 
                 report_count_metric.add_metric(label_values, len(reports))
