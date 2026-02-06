@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import datetime
 import logging
+import math
 import os
 import re
 import subprocess
@@ -18,6 +19,38 @@ if SUBMODULE_ROOT not in sys.path:
 
 from NovaApi.ListDevices.nbe_list_devices import request_device_list
 from ProtoDecoders.decoder import get_canonic_ids, parse_device_list_protobuf
+
+
+def _plain_float_to_go_string(value):
+    if math.isnan(value):
+        return "NaN"
+    if value == float("inf"):
+        return "+Inf"
+    if value == float("-inf"):
+        return "-Inf"
+
+    if float(value).is_integer():
+        return str(int(value))
+
+    rendered = f"{float(value):.15f}".rstrip("0").rstrip(".")
+    if rendered == "-0":
+        return "0"
+    return rendered
+
+
+def _patch_prometheus_float_formatter():
+    # Force plain decimal formatting to avoid scientific notation like 1.23e+09.
+    try:
+        import prometheus_client.exposition as exposition
+        exposition.floatToGoString = _plain_float_to_go_string
+    except Exception:
+        pass
+
+    try:
+        import prometheus_client.openmetrics.exposition as om_exposition
+        om_exposition.floatToGoString = _plain_float_to_go_string
+    except Exception:
+        pass
 
 
 class FindMyToolsCollector:
@@ -192,6 +225,8 @@ class FindMyToolsCollector:
 
 
 def main():
+    _patch_prometheus_float_formatter()
+
     host = os.getenv("EXPORTER_HOST", "0.0.0.0")
     port = int(os.getenv("EXPORTER_PORT", "9824"))
     timeout_seconds = float(os.getenv("LOCATION_TIMEOUT_SECONDS", "30"))
