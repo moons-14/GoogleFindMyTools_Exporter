@@ -1,0 +1,11 @@
+# Prometheus exporter dependencies
+# Assumes GoogleFindMyTools is added as a git submodule at:
+# ./GoogleFindMyTools
+
+# Reuse all upstream dependencies from the submodule
+-r ./GoogleFindMyTools/requirements.txt
+
+# Exporter runtime
+prometheus-client>=0.21.1
+python-dotenv>=1.0.1
+tenacity>=9.0.0
