@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Local secrets should never be baked into image layers.
+GoogleFindMyTools/Auth/secrets.json
+
+# IDE/editor files
+.vscode
+.idea
+.DS_Store

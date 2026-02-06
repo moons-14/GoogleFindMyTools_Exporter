@@ -38,6 +38,38 @@ python prometheus_exporter.py
 
 After startup, check metrics at `http://127.0.0.1:9824/metrics`.
 
+## Docker
+
+Run with published image:
+
+```bash
+docker run --rm \
+  -p 9824:9824 \
+  -e EXPORTER_PORT=9824 \
+  -e LOCATION_TIMEOUT_SECONDS=30 \
+  -e LOG_LEVEL=INFO \
+  -v ./GoogleFindMyTools/Auth/secrets.json:/app/GoogleFindMyTools/Auth/secrets.json:ro \
+  ghcr.io/moons-14/googlefindmytools_exporter:latest
+```
+
+## Docker Compose Example (from another repository)
+
+```yaml
+services:
+  findmytools-exporter:
+    image: ghcr.io/moons-14/googlefindmytools_exporter:latest
+    container_name: findmytools-exporter
+    restart: unless-stopped
+    ports:
+      - "9824:9824"
+    environment:
+      EXPORTER_PORT: "9824"
+      LOCATION_TIMEOUT_SECONDS: "30"
+      LOG_LEVEL: "INFO"
+    volumes:
+      - ./secrets.json:/app/GoogleFindMyTools/Auth/secrets.json:ro
+```
+
 ## Environment Variables
 
 - `EXPORTER_HOST` (default: `0.0.0.0`)
