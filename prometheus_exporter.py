@@ -32,8 +32,8 @@ def _plain_float_to_go_string(value):
     if float(value).is_integer():
         return str(int(value))
 
-    rendered = f"{float(value):.15f}".rstrip("0").rstrip(".")
-    if rendered == "-0":
+    rendered = f"{float(value):.7f}"
+    if rendered in ("-0.0000000", "0.0000000"):
         return "0"
     return rendered
 
@@ -200,13 +200,13 @@ class FindMyToolsCollector:
                     scrape_success_metric.add_metric(label_values, 0)
                     continue
 
-                latitude_metric.add_metric(label_values, latest["latitude"])
-                longitude_metric.add_metric(label_values, latest["longitude"])
+                latitude_metric.add_metric(label_values, round(latest["latitude"], 7))
+                longitude_metric.add_metric(label_values, round(latest["longitude"], 7))
                 altitude_metric.add_metric(label_values, latest["altitude"])
                 timestamp_metric.add_metric(label_values, latest["time"])
                 status_metric.add_metric(label_values, latest["status"])
                 own_report_metric.add_metric(label_values, 1 if latest["is_own_report"] else 0)
-                age_metric.add_metric(label_values, max(0.0, now - latest["time"]))
+                age_metric.add_metric(label_values, int(max(0.0, now - latest["time"])))
                 scrape_success_metric.add_metric(label_values, 1)
             except Exception as exc:
                 logging.exception("Failed scraping device '%s' (%s): %s", device_name, device_id, exc)
